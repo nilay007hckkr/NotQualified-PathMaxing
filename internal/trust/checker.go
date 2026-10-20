@@ -40,8 +40,9 @@ type Result struct {
 	Status    int // 0 when no response arrived
 	FinalURL  string
 	FinalHost string
-	Hops      int    // redirects followed
-	Error     string // network or policy error, empty on a response
+	Hops      int      // redirects followed
+	HopHosts  []string // host of every URL visited, first to last
+	Error     string   // network or policy error, empty on a response
 }
 
 // Reachable reports whether the destination answered without an error
@@ -105,8 +106,10 @@ func (c *Checker) Check(ctx context.Context, rawURL string) Result {
 
 	hops := 0
 	final := req.URL
+	hosts := []string{strings.ToLower(req.URL.Hostname())}
 	client := *c.client
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		hosts = append(hosts, strings.ToLower(next.URL.Hostname()))
 		if err := c.client.CheckRedirect(next, via); err != nil {
 			return err
 		}
@@ -116,7 +119,7 @@ func (c *Checker) Check(ctx context.Context, rawURL string) Result {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		res := Result{Error: cleanError(err), Hops: hops}
+		res := Result{Error: cleanError(err), Hops: hops, HopHosts: hosts}
 		res.FinalURL, res.FinalHost = final.String(), strings.ToLower(final.Hostname())
 		return res
 	}
@@ -129,6 +132,7 @@ func (c *Checker) Check(ctx context.Context, rawURL string) Result {
 		FinalURL:  resp.Request.URL.String(),
 		FinalHost: strings.ToLower(resp.Request.URL.Hostname()),
 		Hops:      hops,
+		HopHosts:  hosts,
 	}
 }
 
