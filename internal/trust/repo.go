@@ -54,7 +54,10 @@ func (r PGRepo) SaveCheck(ctx context.Context, linkID int64, c CheckRecord, s St
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE links SET trust_state = $2, trust_failures = $3, trust_baseline_host = $4,
-			trust_baseline_destination = $5, last_checked_at = $6, next_check_at = $7
+			trust_baseline_destination = $5, last_checked_at = $6,
+			-- A re-scan forced while this check was running set next_check_at
+			-- after the check started; keep it, or the forced re-scan is lost.
+			next_check_at = CASE WHEN next_check_at > $6 THEN next_check_at ELSE $7 END
 		WHERE id = $1`,
 		linkID, string(s.Trust), s.Failures, s.BaselineHost, s.BaselineDestination, c.CheckedAt, nextCheck); err != nil {
 		return err

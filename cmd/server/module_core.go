@@ -31,7 +31,7 @@ func init() {
 			app.Provide[domain.Blocklist](a, store)
 			app.Provide[domain.AuditLog](a, store)
 			app.Provide[domain.ClickSink](a, memstore.NewClickLog(1000))
-			app.Provide[domain.TrafficClassifier](a, classify.Simple{})
+			app.Provide[domain.TrafficClassifier](a, classify.NewHonest())
 			app.Provide[domain.TrustChecker](a, domain.SkipTrustChecker{})
 			app.Provide[domain.CacheInvalidator](a, domain.NoopInvalidator{})
 			app.Provide[domain.AuthGuard](a, domain.DenyAllGuard{})

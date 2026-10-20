@@ -117,6 +117,9 @@ type RequestInfo struct {
 	Purpose string
 	IP      netip.Addr
 	At      time.Time
+	// LinkID is the link being visited. A mail scanner opens every link in a
+	// message at once; a crowd scanning one QR code opens one link.
+	LinkID int64
 }
 
 // Classification is a traffic class plus the reason it was chosen.

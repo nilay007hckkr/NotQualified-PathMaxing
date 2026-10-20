@@ -183,8 +183,12 @@ func TestRefusalPages(t *testing.T) {
 		}
 	}
 	// The quarantine page shows the host but never links to it.
-	if body := e.do("GET", "/bad", chromeDesk).Body.String(); strings.Contains(body, "href=") {
+	body := e.do("GET", "/bad", chromeDesk).Body.String()
+	if strings.Contains(body, `href="https://phish.example`) || strings.Contains(body, `href="http`) {
 		t.Error("warning page links to the flagged destination")
+	}
+	if !strings.Contains(body, `href="/p/bad"`) {
+		t.Error("warning page should point to the transparency page")
 	}
 }
 

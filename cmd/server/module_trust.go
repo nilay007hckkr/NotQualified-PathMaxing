@@ -7,8 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"pathmaxing/internal/alerts"
 	"pathmaxing/internal/app"
 	"pathmaxing/internal/domain"
+	"pathmaxing/internal/geo"
 	"pathmaxing/internal/ratelimit"
 	"pathmaxing/internal/threatintel"
 	"pathmaxing/internal/trust"
@@ -18,6 +20,10 @@ import (
 // feed key is optional: a feed without one is skipped, and the skip is
 // logged at startup and reported with every check.
 func init() {
+	// One server runs per process, so the module keeps its GeoLite2 reader
+	// here to close it in Stop.
+	var geoDB *geo.Lookup
+
 	app.Register(app.Module{
 		Name:     "trust",
 		Priority: 30,
@@ -36,6 +42,16 @@ func init() {
 			}
 			for _, s := range notConfigured {
 				a.Log.Info("threat feed skipped", "reason", s)
+			}
+			if path := a.Config.String("GEOLITE2_DB_PATH", ""); path != "" {
+				db, err := geo.Open(path)
+				if err != nil {
+					return err
+				}
+				geoDB = db
+				app.Provide[domain.GeoLookup](a, db)
+			} else {
+				a.Log.Info("country lookup skipped: GEOLITE2_DB_PATH not set")
 			}
 			set := threatintel.NewSet(feeds, notConfigured, 5*time.Second)
 			app.Provide(a, set)
@@ -65,6 +81,12 @@ func init() {
 			if err != nil {
 				return err
 			}
+			alertStore := &alerts.Store{Pool: pool, Log: a.Log}
+			scanner.OnTransition = func(ctx context.Context, l domain.Link, t trust.Transition) {
+				alertStore.OnTrust(ctx, l, t.Next.Trust, t.Detail)
+			}
+			app.Provide(a, alertStore)
+			app.Provide[domain.AlertCounter](a, alertStore)
 			app.Provide(a, scanner)
 			app.Provide(a, &trust.Scheduler{
 				Scanner: scanner, Repo: repo, Interval: interval, Concurrency: workers, Batch: 20, Log: a.Log,
@@ -88,11 +110,30 @@ func init() {
 				Guard: guard, Links: links, Repo: sched.Repo, Scheduler: sched,
 				RescanLimiter: ratelimit.New(10, time.Hour), Log: a.Log,
 			}).Register(mux)
+			resolver, err := app.Get[domain.LinkResolver](a)
+			if err != nil {
+				return err
+			}
+			(&trust.Transparency{Links: resolver, Repo: sched.Repo, Log: a.Log}).Register(mux)
+			if store, ok := app.Lookup[*alerts.Store](a); ok {
+				(&alerts.API{Guard: guard, Store: store}).Register(mux)
+			}
 			return nil
 		},
 		Start: func(_ context.Context, a *app.App) error {
 			if sched, ok := app.Lookup[*trust.Scheduler](a); ok {
 				a.Go("trust-scheduler", sched.Run)
+			}
+			if store, ok := app.Lookup[*alerts.Store](a); ok {
+				a.Go("alert-evaluator", store.Run(time.Minute))
+			}
+			return nil
+		},
+		Stop: func(context.Context) error {
+			if geoDB != nil {
+				err := geoDB.Close()
+				geoDB = nil
+				return err
 			}
 			return nil
 		},

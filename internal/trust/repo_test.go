@@ -46,6 +46,20 @@ func TestPGRepo(t *testing.T) {
 		t.Fatalf("History = %+v, %v", hist, err)
 	}
 
+	// A re-scan forced while a check runs survives that check's save.
+	started := time.Now().UTC().Add(-time.Second)
+	if err := r.ScheduleNow(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	rec.CheckedAt = started
+	if err := r.SaveCheck(ctx, id, rec, st, started.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if due, _ := r.Due(ctx, time.Now().Add(time.Second), 10); len(due) != 1 {
+		t.Fatal("a forced re-scan was overwritten by the check that was already running")
+	}
+	rec.CheckedAt = now
+
 	// Quarantined links are not re-scanned.
 	st.Trust = domain.TrustQuarantined
 	if err := r.SaveCheck(ctx, id, rec, st, now); err != nil {

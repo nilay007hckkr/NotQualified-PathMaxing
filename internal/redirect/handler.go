@@ -85,7 +85,7 @@ func (h *Handler) visit(w http.ResponseWriter, r *http.Request) {
 	ip := httpx.ClientIP(r, h.ProxyHops)
 	ua := r.UserAgent()
 	class := h.Classifier.Classify(domain.RequestInfo{
-		Method: r.Method, UserAgent: ua, Referrer: r.Referer(), Purpose: purpose(r), IP: ip, At: now,
+		Method: r.Method, UserAgent: ua, Referrer: r.Referer(), Purpose: purpose(r), IP: ip, At: now, LinkID: link.ID,
 	})
 	agent := classify.ParseUA(ua)
 	unlocked := link.HasPassword() && h.Unlocker.Valid(r, link.ID, link.PasswordHash, now)
@@ -140,6 +140,7 @@ func (h *Handler) visit(w http.ResponseWriter, r *http.Request) {
 	case domain.OutcomeQuarantined, domain.OutcomeBlockedDomain:
 		p := pageFor(decision.Outcome)
 		p.Host = hostOf(link.Destination)
+		p.Code = link.Code
 		renderPage(w, decision.Status, p)
 	default:
 		renderPage(w, decision.Status, pageFor(decision.Outcome))
