@@ -30,8 +30,7 @@ CI also runs `go test -race ./...`, which needs a C compiler.
 - [`SUMMARY.md`](SUMMARY.md): the problem, the solution and the key decisions
 - [`PARTS.md`](PARTS.md): who owns which part of the code
 - [`API.md`](API.md): the HTTP contract between backend and frontend
-- [`COMMIT_PLAN.md`](COMMIT_PLAN.md): the 38 commits, in order
-- [`CLAUDE.md`](CLAUDE.md): rules and decisions for anyone (or any agent) changing the code
+
 
 ## Layout
 
