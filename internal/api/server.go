@@ -6,14 +6,20 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
 
+	"pathmaxing/internal/admin"
+	"pathmaxing/internal/analytics"
 	"pathmaxing/internal/auth"
+	"pathmaxing/internal/clicks"
 	"pathmaxing/internal/domain"
 	"pathmaxing/internal/httpx"
+	"pathmaxing/internal/ratelimit"
 	"pathmaxing/internal/store"
 )
 
@@ -25,6 +31,19 @@ type Server struct {
 	Store *store.Store
 	Trust domain.TrustChecker
 	Cache domain.CacheInvalidator
+	// Analytics answers the dashboard; Live, when set, feeds the SSE stream.
+	Analytics *analytics.Store
+	Live      *clicks.Broker
+	// Stopping closes when shutdown begins, ending live streams.
+	Stopping <-chan struct{}
+	// Admin runs takedowns and blocklist changes.
+	Admin *admin.Service
+	// Alerts, when set, fills the overview's alerts_open.
+	Alerts domain.AlertCounter
+	// Rate limits; nil means unlimited (tests).
+	CreateLimit, ImportLimit, LoginLimit *ratelimit.Limiter
+	// ProxyHops is TRUSTED_PROXY_HOPS, for the client IP the login limit keys on.
+	ProxyHops int
 	// BaseURL is where short links live, without a trailing slash.
 	BaseURL string
 	Log     *slog.Logger
@@ -45,6 +64,11 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/logout", s.logout)
 	mux.HandleFunc("GET /api/auth/me", s.me)
 	s.registerLinks(mux)
+	s.registerOrg(mux)
+	s.registerAnalytics(mux)
+	s.registerQRBio(mux)
+	s.registerImports(mux)
+	s.registerAdmin(mux)
 }
 
 // authedFunc is a handler that runs only for an authenticated principal.
@@ -108,3 +132,30 @@ func (v *Validation) warn(field, code, msg string) {
 	v.Warnings = append(v.Warnings, Issue{field, code, msg})
 }
 func (v Validation) ok() bool { return len(v.Errors) == 0 }
+
+// issueCodes lists the codes of issues, for places that only report codes.
+func issueCodes(issues []Issue) []string {
+	out := make([]string, 0, len(issues))
+	for _, i := range issues {
+		out = append(out, i.Code)
+	}
+	return out
+}
+
+// limited takes a token for key and, when none is left, answers 429 with
+// Retry-After and reports true.
+func limited(w http.ResponseWriter, l *ratelimit.Limiter, key string) bool {
+	if l == nil {
+		return false
+	}
+	ok, retry := l.Allow(key)
+	if ok {
+		return false
+	}
+	secs := int(math.Ceil(retry.Seconds()))
+	w.Header().Set("Retry-After", strconv.Itoa(secs))
+	httpx.WriteError(w, http.StatusTooManyRequests, "RATE_LIMITED", fmt.Sprintf("too many requests; try again in %d seconds", secs))
+	return true
+}
+
+func userKey(p domain.Principal) string { return "user:" + strconv.FormatInt(p.UserID, 10) }

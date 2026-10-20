@@ -1,0 +1,15 @@
+# Build context filter for deploy/Dockerfile.full (BuildKit reads
+# <Dockerfile>.dockerignore next to the Dockerfile). Keeps secrets and local
+# build output out of the context.
+.env
+.env.*
+!.env.example
+.git
+**/node_modules
+web/dist
+web/coverage
+handoff
+.handoff-shadow
+bin
+tmp
+*.log

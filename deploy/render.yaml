@@ -1,0 +1,47 @@
+# Render Blueprint for PathMaxing's Go server (API, redirects, workers). The
+# web app is served by Vercel, which rewrites API and short-link paths here
+# (see web/vercel.json, which expects this service at
+# https://pathmaxing.onrender.com, so keep the name "pathmaxing"). The
+# database is Neon Postgres, so DATABASE_URL is pasted in the dashboard
+# (sync: false) rather than created here. This file lives in deploy/, so set the
+# Blueprint file path to deploy/render.yaml when creating the Blueprint.
+services:
+  - type: web
+    name: pathmaxing
+    runtime: docker
+    plan: free
+    # Closest Render region to India.
+    region: singapore
+    dockerfilePath: ./deploy/Dockerfile.full
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Visitors reach us through Vercel (the web app's domain) and then
+      # Render's own proxy; each appends one hop to X-Forwarded-For.
+      - key: TRUSTED_PROXY_HOPS
+        value: "2"
+      # Signs password-unlock cookies and keys the daily visitor hash.
+      - key: SECRET_KEY
+        generateValue: true
+      # Neon connection string (with sslmode=require).
+      - key: DATABASE_URL
+        sync: false
+      # The public origin people see: the Vercel domain, for example
+      # https://pathmaxing.vercel.app. Short links and QR codes use it.
+      - key: BASE_URL
+        sync: false
+      # Also accept state-changing requests sent to Render directly.
+      - key: ALLOWED_ORIGINS
+        value: https://pathmaxing.onrender.com
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Optional: without a key that check is skipped and the skip is logged.
+      - key: SAFE_BROWSING_API_KEY
+        sync: false
+      - key: URLHAUS_AUTH_KEY
+        sync: false

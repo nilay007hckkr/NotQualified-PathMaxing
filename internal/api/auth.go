@@ -73,6 +73,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusForbidden, "ORIGIN_NOT_ALLOWED", "requests must come from the PathMaxing app")
 		return
 	}
+	// Keyed on the address, not the account, so guessing many accounts'
+	// passwords from one place is slowed down as much as guessing one.
+	if limited(w, s.LoginLimit, "ip:"+httpx.ClientIP(r, s.ProxyHops).String()) {
+		return
+	}
 	var in credentials
 	if err := httpx.DecodeJSON(w, r, &in); err != nil {
 		s.fail(w, err, "login")

@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1
+#
+# Production image: builds the web app, then the Go server, and ships both
+# in one small image (the server serves the app same-origin under /app/).
+# Build from the repository root:
+#   docker build -f deploy/Dockerfile.full -t pathmaxing .
+
+# ---- 1. web app ---------------------------------------------------------------
+FROM node:20-alpine AS web
+WORKDIR /src/web
+# Lockfile first, so the dependency layer is reused until it changes.
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+# Only source files: copying web/ wholesale would drag a local node_modules
+# (built for another OS) over the one npm ci just installed.
+COPY web/index.html web/tsconfig.json web/vite.config.ts ./
+COPY web/public ./public
+COPY web/src ./src
+RUN npm run build
+
+# ---- 2. Go server ----------------------------------------------------------------
+FROM golang:1.24-alpine AS server
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd ./cmd
+COPY internal ./internal
+# Migrations are embedded into the binary with go:embed.
+COPY migrations ./migrations
+# A static binary, so the final image needs no C library.
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+
+# ---- 3. runtime -------------------------------------------------------------------
+FROM alpine:3.20
+# CA certificates for the trust scanner's HTTPS checks and the threat feeds;
+# tzdata so Asia/Kolkata resolves even if the binary loads it by name.
+RUN apk add --no-cache ca-certificates tzdata \
+ && adduser -D -H -u 10001 app
+WORKDIR /app
+COPY --from=server /out/server /app/server
+COPY --from=web /src/web/dist /app/web
+ENV APP_ENV=production \
+    WEB_DIST_DIR=/app/web \
+    TRUSTED_PROXY_HOPS=1 \
+    PORT=8080
+USER app
+# Render sets PORT itself; the server listens on whatever PORT says.
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]

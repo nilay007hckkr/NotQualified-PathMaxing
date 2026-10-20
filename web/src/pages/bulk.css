@@ -1,0 +1,80 @@
+/* Campaigns, tags, bulk import and bio pages. */
+
+.chips {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.1rem 0.2rem 0 0.6rem;
+  border: 2px solid var(--rule);
+  background: var(--surface);
+  font-family: var(--font-pixel);
+  font-size: 1.2rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.chip-dot {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid var(--rule);
+}
+.chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.2rem;
+  line-height: 1;
+  width: 1.8rem;
+  height: 1.8rem;
+  cursor: pointer;
+}
+.chip-remove:hover {
+  background: var(--pink);
+  color: var(--ink);
+}
+.field-color input {
+  padding: 0.15rem;
+  width: 4rem;
+}
+.toolbar .field-color {
+  min-width: 0;
+}
+/* Invalid rows get a tinted background and a pink edge, plus the "Invalid" pill and codes as text. */
+.row-invalid td {
+  background: var(--danger-soft);
+}
+.row-invalid td:first-child {
+  box-shadow: inset 6px 0 0 var(--pink);
+}
+.row-errors {
+  margin: 0;
+  padding-left: 1rem;
+}
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.plain-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-bottom: 2px solid var(--line);
+}
+.plain-list li:last-child {
+  border-bottom: 0;
+}
+.checks-column {
+  flex-direction: column;
+  max-height: 16rem;
+  overflow-y: auto;
+}

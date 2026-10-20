@@ -25,13 +25,23 @@ export function botTotal(t: Totals): number {
 }
 
 export const tooltipStyle = {
-  contentStyle: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' },
-  labelStyle: { color: 'var(--text)', fontWeight: 600 },
+  contentStyle: {
+    background: 'var(--surface)',
+    border: '3px solid var(--rule)',
+    borderRadius: 0,
+    boxShadow: '4px 4px 0 var(--hard)',
+    color: 'var(--text)',
+    fontFamily: 'var(--font-body)',
+  },
+  labelStyle: { color: 'var(--text)', fontWeight: 700 },
   itemStyle: { color: 'var(--text)' },
-  cursor: { fill: 'var(--surface-2)' },
+  cursor: { fill: 'var(--row-hover)' },
 };
 
-const axisTick = { fill: 'var(--text-muted)', fontSize: 12 };
+const axisTick = { fill: 'var(--text-muted)', fontSize: 15, fontFamily: 'var(--font-pixel)' };
+// Lime is close to white, so every mark carries an outline: ink in light mode,
+// the surface colour in dark mode (which also leaves a gap between stacked segments).
+const markStroke = { stroke: 'var(--chart-stroke)', strokeWidth: 2 };
 
 /**
  * Clicks by traffic class as horizontal bars. Every bar is named on the
@@ -54,7 +64,7 @@ export function ClassChart({ totals, title = 'Clicks by traffic class' }: { tota
               <XAxis type="number" allowDecimals={false} tick={axisTick} stroke="var(--axis)" />
               <YAxis type="category" dataKey="label" width={150} tick={axisTick} stroke="var(--axis)" />
               <Tooltip {...tooltipStyle} formatter={(v) => [formatNumber(Number(v)), 'Clicks']} />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} isAnimationActive={false}>
+              <Bar dataKey="value" {...markStroke} isAnimationActive={false}>
                 {data.map((d) => (
                   <Cell key={d.label} fill={d.fill} />
                 ))}
@@ -91,17 +101,21 @@ export function SeriesChart({ series, interval, title = 'Visits over time' }: { 
               <XAxis dataKey="label" tick={axisTick} stroke="var(--axis)" minTickGap={16} />
               <YAxis allowDecimals={false} tick={axisTick} stroke="var(--axis)" />
               <Tooltip {...tooltipStyle} formatter={(v, name) => [formatNumber(Number(v)), name]} />
-              <Legend wrapperStyle={{ fontSize: 13, color: 'var(--text-muted)' }} />
-              {SERIES.map((s, i) => (
+              {/* Keep the legend in stack order, in text colour: the swatch carries identity, not the words. */}
+              <Legend
+                itemSorter={null}
+                iconType="square"
+                wrapperStyle={{ fontSize: 17, fontFamily: 'var(--font-pixel)', letterSpacing: 1, textTransform: 'uppercase' }}
+                formatter={(value) => <span style={{ color: 'var(--text-muted)' }}>{value}</span>}
+              />
+              {SERIES.map((s) => (
                 <Bar
                   key={s.key}
                   dataKey={s.key}
                   name={s.label}
                   stackId="visits"
                   fill={s.color}
-                  stroke="var(--surface)"
-                  strokeWidth={1}
-                  radius={i === SERIES.length - 1 ? [4, 4, 0, 0] : 0}
+                  {...markStroke}
                   isAnimationActive={false}
                 />
               ))}

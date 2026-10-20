@@ -51,6 +51,7 @@ export function LinksPage() {
     <section aria-labelledby="links-title">
       <div className="page-head">
         <div>
+          <p className="kicker">Your links</p>
           <h1 id="links-title">Links</h1>
           <p className="muted">Every link keeps being re-checked after you publish it.</p>
         </div>

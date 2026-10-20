@@ -40,20 +40,23 @@ func (s *Server) validateLink(w http.ResponseWriter, r *http.Request, p domain.P
 		s.fail(w, err, "link")
 		return
 	}
-	d, targets := fromInput(in)
+	d, targets := fromInput(p.WorkspaceID, in)
 	c := createChecks
 	c.aliasTaken, c.probe = true, true
-	httpx.WriteJSON(w, http.StatusOK, s.validate(r.Context(), p, &d, targets, c))
+	httpx.WriteJSON(w, http.StatusOK, s.validate(r.Context(), &d, targets, c))
 }
 
 func (s *Server) createLink(w http.ResponseWriter, r *http.Request, p domain.Principal) {
+	if limited(w, s.CreateLimit, userKey(p)) {
+		return
+	}
 	var in linkInput
 	if err := httpx.DecodeJSON(w, r, &in); err != nil {
 		s.fail(w, err, "link")
 		return
 	}
-	d, targets := fromInput(in)
-	v := s.validate(r.Context(), p, &d, targets, createChecks)
+	d, targets := fromInput(p.WorkspaceID, in)
+	v := s.validate(r.Context(), &d, targets, createChecks)
 	if !v.ok() {
 		httpx.WriteJSON(w, http.StatusUnprocessableEntity, v)
 		return
@@ -78,6 +81,7 @@ func (s *Server) insertLink(ctx context.Context, p domain.Principal, d draft, pa
 	nl := store.NewLink{
 		WorkspaceID: p.WorkspaceID, OwnerID: p.UserID, Alias: d.Alias, Destination: d.Destination,
 		Title: d.Title, StartsAt: d.StartsAt, ExpiresAt: d.ExpiresAt, MaxClicks: d.MaxClicks, Targets: d.Targets,
+		CampaignID: d.CampaignID, FolderID: d.FolderID, TagIDs: d.TagIDs,
 	}
 	if password != "" {
 		hash, err := s.Auth.HashPassword(password)
@@ -112,6 +116,19 @@ func (s *Server) listLinks(w http.ResponseWriter, r *http.Request, p domain.Prin
 			return
 		}
 		f.TrustState = ts
+	}
+	for _, idf := range []struct {
+		name string
+		dst  *int64
+	}{{"campaign_id", &f.CampaignID}, {"tag_id", &f.TagID}, {"folder_id", &f.FolderID}} {
+		if v := q.Get(idf.name); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || n < 1 {
+				httpx.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", idf.name+" must be a positive number")
+				return
+			}
+			*idf.dst = n
+		}
 	}
 	page, ok := parsePage(w, r)
 	if !ok {
@@ -211,7 +228,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request, p domain.Pri
 	}
 
 	d := draft{
-		Destination: l.Destination, Title: l.Title, StartsAt: l.StartsAt, ExpiresAt: l.ExpiresAt,
+		WorkspaceID: l.WorkspaceID, Destination: l.Destination, Title: l.Title, StartsAt: l.StartsAt, ExpiresAt: l.ExpiresAt,
 		MaxClicks: l.MaxClicks, HasPassword: l.HasPassword(), Targets: l.Targets,
 		CampaignID: l.CampaignID, FolderID: l.FolderID, TagIDs: l.TagIDs,
 	}
@@ -247,7 +264,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request, p domain.Pri
 	if in.FolderID.Set {
 		d.FolderID = in.FolderID.V
 	}
-	v := s.validate(r.Context(), p, &d, rawTargets, c)
+	v := s.validate(r.Context(), &d, rawTargets, c)
 	// Codes are permanent: shared links and printed QR codes point at them.
 	if in.Alias.Set && !strings.EqualFold(in.Alias.value(), l.Code) {
 		v.err("alias", shortcode.CodeAliasInvalid, "a link's code can't be changed; create a new link instead")
@@ -260,6 +277,7 @@ func (s *Server) updateLink(w http.ResponseWriter, r *http.Request, p domain.Pri
 	u := store.LinkUpdate{
 		Destination: d.Destination, Title: d.Title, StartsAt: d.StartsAt, ExpiresAt: d.ExpiresAt,
 		MaxClicks: d.MaxClicks, PasswordHash: l.PasswordHash, Targets: d.Targets,
+		CampaignID: d.CampaignID, FolderID: d.FolderID, TagIDs: d.TagIDs,
 	}
 	if in.Password.Set {
 		u.PasswordHash = nil

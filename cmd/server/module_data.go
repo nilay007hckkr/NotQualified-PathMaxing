@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"pathmaxing/internal/analytics"
 	"pathmaxing/internal/app"
 	"pathmaxing/internal/clicks"
 	"pathmaxing/internal/domain"
@@ -14,7 +15,8 @@ import (
 
 // The data module (part 4) replaces the in-memory link store, blocklist,
 // audit log and click log with Postgres once the db module has provided a
-// pool. Without a database it does nothing and the defaults stay.
+// pool, and provides the analytics queries and the live click feed. Without
+// a database it does nothing and the defaults stay.
 func init() {
 	app.Register(app.Module{
 		Name:     "data",
@@ -33,12 +35,15 @@ func init() {
 			app.Provide[domain.AuditLog](a, st)
 			app.Provide(a, st)
 
-			q, err := newClickQueue(a, st)
+			broker := clicks.NewBroker()
+			q, err := newClickQueue(a, st, broker)
 			if err != nil {
 				return err
 			}
 			app.Provide[domain.ClickSink](a, q)
 			app.Provide(a, q)
+			app.Provide(a, broker)
+			app.Provide(a, analytics.New(pool))
 			return nil
 		},
 		Start: func(_ context.Context, a *app.App) error {
@@ -56,7 +61,7 @@ func init() {
 	})
 }
 
-func newClickQueue(a *app.App, st *store.Store) (*clicks.Queue, error) {
+func newClickQueue(a *app.App, st *store.Store, broker *clicks.Broker) (*clicks.Queue, error) {
 	size, err := a.Config.Int("CLICK_QUEUE_SIZE", 10000)
 	if err != nil {
 		return nil, err
@@ -69,5 +74,8 @@ func newClickQueue(a *app.App, st *store.Store) (*clicks.Queue, error) {
 	if err != nil {
 		return nil, err
 	}
-	return clicks.New(st, clicks.Options{QueueSize: size, BatchSize: batch, FlushInterval: interval, Log: a.Log}), nil
+	return clicks.New(st, clicks.Options{
+		QueueSize: size, BatchSize: batch, FlushInterval: interval, Log: a.Log,
+		OnCommit: broker.Publish,
+	}), nil
 }

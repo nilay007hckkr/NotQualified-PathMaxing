@@ -17,7 +17,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"pathmaxing/internal/admin"
+	"pathmaxing/internal/analytics"
 	"pathmaxing/internal/auth"
+	"pathmaxing/internal/bio"
+	"pathmaxing/internal/clicks"
 	"pathmaxing/internal/domain"
 	"pathmaxing/internal/migrate/pgtest"
 	"pathmaxing/internal/store"
@@ -35,6 +39,8 @@ type env struct {
 	cache *recordingCache
 	srv   *Server
 	http  *httptest.Server
+	// stopping is the server's shutdown signal; closing it ends live streams.
+	stopping chan struct{}
 }
 
 // fakeTrust answers prechecks from a table instead of the network.
@@ -84,10 +90,24 @@ func newEnv(t *testing.T) *env {
 	}
 	trust := &fakeTrust{answers: map[string]domain.Precheck{}}
 	cache := &recordingCache{}
-	srv := &Server{Auth: svc, Guard: svc, Store: st, Trust: trust, Cache: cache, BaseURL: testOrigin, Log: log}
-	e := &env{t: t, pool: pool, auth: svc, store: st, trust: trust, cache: cache, srv: srv}
+	stopping := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-stopping:
+		default:
+			close(stopping)
+		}
+	})
+	srv := &Server{
+		Auth: svc, Guard: svc, Store: st, Trust: trust, Cache: cache,
+		Analytics: analytics.New(pool), Live: clicks.NewBroker(), Stopping: stopping,
+		Admin:   &admin.Service{Store: st, Cache: cache, Log: log},
+		BaseURL: testOrigin, Log: log,
+	}
+	e := &env{t: t, pool: pool, auth: svc, store: st, trust: trust, cache: cache, srv: srv, stopping: stopping}
 	mux := http.NewServeMux()
 	srv.Register(mux)
+	(&bio.Handler{Pages: st, BaseURL: testOrigin, Log: log}).Register(mux)
 	e.http = httptest.NewServer(mux)
 	t.Cleanup(e.http.Close)
 	return e

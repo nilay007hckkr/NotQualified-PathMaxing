@@ -35,7 +35,8 @@ Used by validate, create and update.
 | Destination URL | `INVALID_URL`, `SCHEME_NOT_ALLOWED`, `USERINFO_NOT_ALLOWED`, `SELF_LOOP`, `NOT_PUBLIC`, `BLOCKED_DOMAIN`, `THREAT_MATCH` |
 | Alias | `ALIAS_TAKEN`, `ALIAS_RESERVED`, `ALIAS_INVALID` |
 | Rules and options | `EXPIRY_IN_PAST`, `EXPIRY_BEFORE_START`, `CAP_INVALID`, `TARGET_DEVICE_INVALID` |
-| CSV import only | `UNKNOWN_CAMPAIGN`, `DUP_IN_FILE` |
+| Labels (link input and CSV) | `UNKNOWN_CAMPAIGN`, `UNKNOWN_TAG`, `UNKNOWN_FOLDER` (the id or name is not in the link's workspace) |
+| CSV import only | `DUP_IN_FILE`, `EXPIRY_INVALID` (unparsable date) |
 
 **Warning codes:** `HTTP_NOT_HTTPS`, `PUNYCODE_DOMAIN`, `LONG_REDIRECT_CHAIN`, `DESTINATION_UNREACHABLE`, `ONE_CLICK_NO_PASSWORD`.
 
@@ -203,6 +204,57 @@ Reserved codes, which can't be used as aliases: `api`, `app`, `p`, `bio`, `admin
 - `GET /api/admin/audit?limit&cursor` → `{items: [{id, actor_id, action, entity_type, entity_id, detail, ts}]}`
 - `GET /api/admin/users`
 - `GET /api/admin/analytics/overview`: the overview across the whole platform.
+
+## As built: details API.md left open
+
+These are the choices the implementation made; the frontend relies on them.
+
+**Errors.** `401 UNAUTHENTICATED` when the session is missing or the request's Origin is not ours (`403 ORIGIN_NOT_ALLOWED` on the auth endpoints themselves); `400 BAD_REQUEST` for unknown JSON fields, malformed JSON or bad query parameters; `429 RATE_LIMITED` with `Retry-After`.
+
+**Auth.** Signup validation is `422 {errors, warnings}` with `EMAIL_INVALID`, `PASSWORD_TOO_SHORT` (under 8), `PASSWORD_TOO_LONG` (over 72 bytes, bcrypt's limit) or `NAME_TOO_LONG`; a taken email is `409 EMAIL_TAKEN`. Login failures are `401 BAD_CREDENTIALS`, the same for an unknown email and a wrong password. `ADMIN_EMAIL`/`ADMIN_PASSWORD` create or promote the admin at startup.
+
+**Links.**
+- `409` on an alias lost at insert carries the validation shape (`errors: [{field: "alias", code: "ALIAS_TAKEN"}]`).
+- Validate also looks the alias up early. `THREAT_MATCH` blocks validate and create. `DESTINATION_UNREACHABLE` and `LONG_REDIRECT_CHAIN` (3 or more hops) are warnings on validate only.
+- Target errors use the fields `targets[i].device` and `targets[i].destination`.
+- PATCH re-checks only the fields it sends and can't change the alias (`422 ALIAS_INVALID`). An owner can't pause, resume or archive an admin-disabled link (`409 LINK_DISABLED`).
+- Admins see every workspace's links.
+
+**Campaigns, tags, folders.**
+- Single resources are wrapped: `{campaign}`, `{tag}`, `{folder}`. Lists are pages. `GET` exists for one tag or folder too.
+- Codes: `NAME_REQUIRED`, `NAME_TOO_LONG`, `NAME_TAKEN` (409; names are unique per workspace in any case), `COLOR_INVALID` (`#rrggbb`), `FOLDER_CYCLE`.
+- Deleting a label keeps its links.
+
+**Analytics.**
+- **How visits are counted:**
+  - A class's count in `totals` is its redirected visits.
+  - `refused` counts every refused visit of any class, so the totals add up to all visits.
+  - `series` reports `human` and `bots` (redirected) and `refused`.
+  - Breakdowns count redirected human clicks. A missing device shows as `unknown`, a missing browser or OS as `Other`. Referrers, countries, browsers and OS are the top 10.
+  - `unique_visitor_days` is distinct (local day, visitor hash) pairs among human visits.
+- **Series:** zero-filled; hourly covers up to 31 days, daily up to 400.
+- **Overview:** `/api/analytics/overview` is the caller's own workspace. `alerts_open` is `null` when alerts are not available.
+- **Live stream:** `/api/analytics/live` sends `: connected`, `event: click` and a 15 s heartbeat, and answers `503 LIVE_UNAVAILABLE` without a broker. The web app polls every 5 s instead.
+
+**QR and bio pages.**
+- QR images are `private, max-age=86400`. A bad `size` (allowed: 128–1024) or `format` is a 400.
+- `GET /api/bio-pages/{id}` exists. Bio codes: `SLUG_INVALID` (alias rules), `SLUG_TAKEN` (409), `TITLE_TOO_LONG`, `TOO_MANY_LINKS` (over 50), `DUPLICATE_LINK`, `UNKNOWN_LINK`. The public page lists only links a visitor could open now.
+
+**Imports.**
+- **Whole-file errors:** `413 FILE_TOO_LARGE`, `413 TOO_MANY_ROWS`, `400 BAD_CSV`, and `400 BAD_REQUEST` without a multipart `file` field.
+- **Rows:** row numbers are file lines (header = 1). Missing tags are created at commit.
+- **Commit:** `200 {created, skipped}`; a second commit is `409 ALREADY_COMMITTED`.
+
+**Trust and alerts.**
+- `GET /api/links/{id}/trust` checks also carry `detail` and `error`.
+- Both trust endpoints return 404 for anyone else's link.
+- `GET /api/alerts?status=open|all` (default `open`); there is one open alert per link and kind, and alerts clear when their condition does.
+
+**Admin.**
+- Disabling needs a reason (`422 REASON_REQUIRED`).
+- Enabling a quarantined link also releases it (trust back to `ok`, audit `link.released`).
+- `POST /api/admin/blocklist` is an upsert (`201 {blocked_domain}`, `422 DOMAIN_INVALID`). Unblocking an unknown domain is a 404. A blocklist change applies from the next visit.
+- Users and audit take `limit` and `cursor`.
 
 ## Rate limits
 

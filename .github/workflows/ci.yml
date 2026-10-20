@@ -1,0 +1,56 @@
+# Runs on every push and pull request. Teammates run go build, vet and test
+# without -race (it needs a C compiler); CI is where the race detector runs.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pathmaxing
+          POSTGRES_PASSWORD: pathmaxing
+          POSTGRES_DB: pathmaxing_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pathmaxing -d pathmaxing_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # The store, analytics and API tests run against this database; each
+      # test makes and drops its own schema.
+      TEST_DATABASE_URL: postgres://pathmaxing:pathmaxing@localhost:5432/pathmaxing_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # The go line in go.mod (1.24), so CI proves older toolchains work.
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - name: gofmt
+        run: |
+          out=$(gofmt -l $(go list -f '{{.Dir}}' ./...))
+          if [ -n "$out" ]; then echo "gofmt would change:"; echo "$out"; exit 1; fi
+      - run: go test -race ./...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test

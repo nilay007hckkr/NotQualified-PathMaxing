@@ -1,0 +1,13 @@
+# Keep secrets, handoff output and local builds out of the image context.
+.env
+.env.*
+!.env.example
+.git
+handoff
+.handoff-shadow
+web/node_modules
+web/dist
+web/coverage
+bin
+tmp
+*.exe

@@ -7,15 +7,20 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"pathmaxing/internal/admin"
+	"pathmaxing/internal/analytics"
 	"pathmaxing/internal/api"
 	"pathmaxing/internal/app"
 	"pathmaxing/internal/auth"
+	"pathmaxing/internal/bio"
+	"pathmaxing/internal/clicks"
 	"pathmaxing/internal/domain"
+	"pathmaxing/internal/ratelimit"
 	"pathmaxing/internal/store"
 )
 
 // The api module (part 4) replaces the deny-all guard with real sessions and
-// mounts the management API under /api/. Without a database there are no
+// mounts the management API under /api/ and the public bio pages under /bio/. Without a database there are no
 // accounts, so it does nothing: the guard keeps refusing and /api/ stays
 // unmounted.
 func init() {
@@ -71,11 +76,27 @@ func init() {
 			if err != nil {
 				return err
 			}
+			an, err := app.Get[*analytics.Store](a)
+			if err != nil {
+				return err
+			}
+			live, _ := app.Lookup[*clicks.Broker](a)
+			// Alerts arrive with the trust layer; until then alerts_open is null.
+			alerts, _ := app.Lookup[domain.AlertCounter](a)
 			srv := &api.Server{
 				Auth: svc, Guard: guard, Store: st, Trust: trust, Cache: cache,
-				BaseURL: a.Config.BaseURL, Log: a.Log,
+				Analytics: an, Live: live, Stopping: a.Stopping(),
+				Admin:  &admin.Service{Store: st, Cache: cache, Log: a.Log},
+				Alerts: alerts,
+				// The limits from API.md.
+				CreateLimit: ratelimit.New(30, time.Minute),
+				ImportLimit: ratelimit.New(5, time.Hour),
+				LoginLimit:  ratelimit.New(10, 15*time.Minute),
+				ProxyHops:   a.Config.TrustedProxyHops,
+				BaseURL:     a.Config.BaseURL, Log: a.Log,
 			}
 			srv.Register(mux)
+			(&bio.Handler{Pages: st, BaseURL: a.Config.BaseURL, Log: a.Log}).Register(mux)
 			return nil
 		},
 	})

@@ -34,7 +34,6 @@ list_files() {
       n = split($0, parts, "/"); base = parts[n]
       if (base ~ /^\.env(\..+)?$/ && base != ".env.example") next
       if (base ~ /\.(exe|test|out|log|tsbuildinfo)$/ || base ~ /^__debug_bin/) next
-      if ($0 == ".claude/settings.local.json") next
       print
     }' |
     LC_ALL=C sort

@@ -6,6 +6,7 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/monperrus/crawler-user-agents v1.62.0
 	github.com/oschwald/geoip2-golang v1.13.0
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	golang.org/x/crypto v0.48.0
 )
 

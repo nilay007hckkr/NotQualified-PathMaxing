@@ -55,8 +55,11 @@ export function AuthCard({ title, subtitle, children }: { title: string; subtitl
       <div className="auth-card">
         <div className="brand brand-large">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={36} height={36} />
-          <span>PathMaxing</span>
+          <span>
+            Path<b>Maxing</b>
+          </span>
         </div>
+        <p className="kicker">The accountable short link</p>
         <h1>{title}</h1>
         <p className="muted">{subtitle}</p>
         {children}

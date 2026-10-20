@@ -45,6 +45,11 @@ func TestInsertClicksIdempotent(t *testing.T) {
 	if source != "qr" || country != "IN" || device != "mobile" || !ts.Equal(at) {
 		t.Fatalf("stored %q %q %q %v", source, country, device, ts)
 	}
+	// The retry left the rollups exact: one human click and one crawler visit.
+	var rolled int64
+	if err := s.pool.QueryRow(ctx, `SELECT sum(n) FROM click_rollups WHERE link_id = $1 AND bucket = $2`, l.ID, at).Scan(&rolled); err != nil || rolled != 2 {
+		t.Fatalf("rollups after a retried batch = %d, %v; want 2", rolled, err)
+	}
 	if n, err := s.InsertClicks(ctx, nil); err != nil || n != 0 {
 		t.Fatalf("empty batch = %d, %v", n, err)
 	}

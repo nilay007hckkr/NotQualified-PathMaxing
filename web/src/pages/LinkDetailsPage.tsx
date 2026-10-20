@@ -75,6 +75,7 @@ function Details({ link }: { link: Link }) {
       </p>
       <div className="page-head">
         <div>
+          <p className="kicker">Link details</p>
           <h1 id="link-title">{link.title || `/${link.code}`}</h1>
           <p className="short-url">
             <a href={link.short_url} target="_blank" rel="noreferrer">

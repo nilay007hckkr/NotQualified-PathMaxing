@@ -22,6 +22,3 @@ node_modules/
 .vite/
 *.tsbuildinfo
 *.log
-
-# Local tool settings.
-.claude/settings.local.json

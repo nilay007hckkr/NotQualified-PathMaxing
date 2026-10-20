@@ -36,6 +36,7 @@ const (
 // draft is a link as it would be saved: a create's input, or a PATCH merged
 // into the current link.
 type draft struct {
+	WorkspaceID int64 // the link's workspace, which its campaign, tags and folder must belong to
 	Destination string
 	Alias       string
 	Title       string
@@ -59,13 +60,15 @@ type checks struct {
 	expiry      bool
 	targets     bool
 	probe       bool // reachability warnings, for the validate step only
+	noTrust     bool // skip the trust precheck; bulk import runs it for many rows at once
 }
 
 var createChecks = checks{destination: true, alias: true, expiry: true, targets: true}
 
 // fromInput builds a create draft.
-func fromInput(in linkInput) (draft, []targetJSON) {
+func fromInput(workspaceID int64, in linkInput) (draft, []targetJSON) {
 	d := draft{
+		WorkspaceID: workspaceID,
 		Destination: in.Destination.value(), Alias: in.Alias.value(), Title: in.Title.value(),
 		StartsAt: in.StartsAt.V, ExpiresAt: in.ExpiresAt.V, MaxClicks: in.MaxClicks.V,
 		HasPassword: in.Password.value() != "",
@@ -74,8 +77,8 @@ func fromInput(in linkInput) (draft, []targetJSON) {
 	return d, in.Targets.value()
 }
 
-// validate checks d for p and normalizes its destinations in place.
-func (s *Server) validate(ctx context.Context, p domain.Principal, d *draft, rawTargets []targetJSON, c checks) Validation {
+// validate checks d and normalizes its destinations in place.
+func (s *Server) validate(ctx context.Context, d *draft, rawTargets []targetJSON, c checks) Validation {
 	v := newValidation()
 	opts := urlcheck.Options{SelfHosts: s.selfHosts(), Blocklist: s.Store.BlockedDomains()}
 
@@ -146,9 +149,9 @@ func (s *Server) validate(ctx context.Context, p domain.Principal, d *draft, raw
 		v.warn("max_clicks", warnOneClickNoPwd, "a one-click link without a password is used up by whoever opens it first, including a chat app's preview if it is mistaken for a person")
 	}
 
-	s.checkOrganisation(ctx, p, d, &v)
+	s.checkOrganisation(ctx, d, &v)
 
-	if destOK {
+	if destOK && !c.noTrust {
 		s.precheck(ctx, d.Destination, c.probe, &v)
 	}
 	return v
@@ -185,17 +188,4 @@ func (s *Server) selfHosts() []string {
 		return nil
 	}
 	return []string{u.Hostname()}
-}
-
-// checkOrganisation refuses campaign, tag and folder ids until those exist.
-func (s *Server) checkOrganisation(_ context.Context, _ domain.Principal, d *draft, v *Validation) {
-	if d.CampaignID != nil {
-		v.err("campaign_id", "UNKNOWN_CAMPAIGN", "campaign not found")
-	}
-	if len(d.TagIDs) > 0 {
-		v.err("tag_ids", "UNKNOWN_TAG", "tag not found")
-	}
-	if d.FolderID != nil {
-		v.err("folder_id", "UNKNOWN_FOLDER", "folder not found")
-	}
 }

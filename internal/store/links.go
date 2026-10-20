@@ -20,7 +20,9 @@ const linkColumns = `
 	l.starts_at, l.expires_at, l.max_clicks, l.cap_used, l.password_hash, l.last_checked_at,
 	l.created_at, l.updated_at, l.deleted_at,
 	COALESCE((SELECT json_agg(json_build_object('device', r.device, 'destination', r.destination) ORDER BY r.device)
-	          FROM redirect_rules r WHERE r.link_id = l.id), '[]')`
+	          FROM redirect_rules r WHERE r.link_id = l.id), '[]'),
+	l.campaign_id, l.folder_id,
+	COALESCE((SELECT array_agg(lt.tag_id ORDER BY lt.tag_id) FROM link_tags lt WHERE lt.link_id = l.id), '{}')`
 
 type targetRow struct {
 	Device      string `json:"device"`
@@ -38,6 +40,7 @@ func scanLink(row pgx.Row) (domain.Link, error) {
 		&l.ID, &l.WorkspaceID, &l.OwnerID, &l.Code, &l.Destination, &l.Title, &status, &trust,
 		&l.StartsAt, &l.ExpiresAt, &l.MaxClicks, &l.CapUsed, &l.PasswordHash, &l.LastCheckedAt,
 		&l.CreatedAt, &l.UpdatedAt, &l.DeletedAt, &targets,
+		&l.CampaignID, &l.FolderID, &l.TagIDs,
 	)
 	if err != nil {
 		return domain.Link{}, err
@@ -93,6 +96,9 @@ type NewLink struct {
 	MaxClicks    *int64
 	PasswordHash []byte
 	Targets      []domain.Target
+	CampaignID   *int64
+	FolderID     *int64
+	TagIDs       []int64
 }
 
 // generatedCodeAttempts bounds the retries for random codes. With 36^8
@@ -145,16 +151,20 @@ func (s *Store) insertLink(ctx context.Context, in NewLink, code string) (int64,
 
 	var id int64
 	err = tx.QueryRow(ctx, `
-		INSERT INTO links (workspace_id, owner_id, code, destination, title, starts_at, expires_at, max_clicks, password_hash)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO links (workspace_id, owner_id, code, destination, title, starts_at, expires_at, max_clicks, password_hash,
+		                   campaign_id, folder_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id`,
 		in.WorkspaceID, in.OwnerID, code, in.Destination, strings.TrimSpace(in.Title),
-		in.StartsAt, in.ExpiresAt, in.MaxClicks, nullBytes(in.PasswordHash),
+		in.StartsAt, in.ExpiresAt, in.MaxClicks, nullBytes(in.PasswordHash), in.CampaignID, in.FolderID,
 	).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
 	if err := replaceTargets(ctx, tx, id, in.Targets); err != nil {
+		return 0, err
+	}
+	if err := replaceTags(ctx, tx, id, in.TagIDs); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit(ctx)
@@ -172,6 +182,17 @@ func replaceTargets(ctx context.Context, tx pgx.Tx, linkID int64, targets []doma
 		}
 	}
 	return nil
+}
+
+func replaceTags(ctx context.Context, tx pgx.Tx, linkID int64, tagIDs []int64) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM link_tags WHERE link_id = $1`, linkID); err != nil {
+		return err
+	}
+	if len(tagIDs) == 0 {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO link_tags (link_id, tag_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, linkID, tagIDs)
+	return err
 }
 
 // DeleteLink soft-deletes a link and returns it as it was, so the caller can

@@ -174,6 +174,7 @@ export function NewLinkPage() {
     <section aria-labelledby="wizard-title" className="wizard">
       <div className="page-head">
         <div>
+          <p className="kicker">New short link</p>
           <h1 id="wizard-title">Create a link</h1>
           <p className="muted">We check the destination and alias before anything is saved.</p>
         </div>

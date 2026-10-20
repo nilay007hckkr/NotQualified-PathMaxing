@@ -23,8 +23,14 @@ type LinkFilter struct {
 	Q           string
 	Status      string
 	TrustState  string
-	BeforeID    int64 // cursor: only links with a smaller id
-	Limit       int
+	CampaignID  int64
+	TagID       int64
+	FolderID    int64
+	// Abuse selects what admins review: links the trust scanner flagged
+	// and links an admin disabled.
+	Abuse    bool
+	BeforeID int64 // cursor: only links with a smaller id
+	Limit    int
 }
 
 // ListLinks returns links newest first. Paging by id rather than by offset
@@ -50,6 +56,18 @@ func (s *Store) ListLinks(ctx context.Context, f LinkFilter) ([]domain.Link, err
 	}
 	if f.TrustState != "" {
 		where = append(where, "l.trust_state = "+arg(f.TrustState))
+	}
+	if f.CampaignID > 0 {
+		where = append(where, "l.campaign_id = "+arg(f.CampaignID))
+	}
+	if f.FolderID > 0 {
+		where = append(where, "l.folder_id = "+arg(f.FolderID))
+	}
+	if f.TagID > 0 {
+		where = append(where, "EXISTS (SELECT 1 FROM link_tags lt WHERE lt.link_id = l.id AND lt.tag_id = "+arg(f.TagID)+")")
+	}
+	if f.Abuse {
+		where = append(where, "(l.trust_state IN ('quarantined', 'changed', 'degraded') OR l.status = 'disabled_admin')")
 	}
 	if f.BeforeID > 0 {
 		where = append(where, "l.id < "+arg(f.BeforeID))
@@ -86,6 +104,9 @@ type LinkUpdate struct {
 	MaxClicks    *int64
 	PasswordHash []byte
 	Targets      []domain.Target
+	CampaignID   *int64
+	FolderID     *int64
+	TagIDs       []int64
 }
 
 // UpdateLink writes the editable fields and the device targets in one
@@ -98,9 +119,10 @@ func (s *Store) UpdateLink(ctx context.Context, id int64, u LinkUpdate) (domain.
 	defer tx.Rollback(ctx) // a no-op once committed
 	tag, err := tx.Exec(ctx, `
 		UPDATE links SET destination = $2, title = $3, starts_at = $4, expires_at = $5, max_clicks = $6,
-		                 password_hash = $7, updated_at = now()
+		                 password_hash = $7, campaign_id = $8, folder_id = $9, updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL`,
-		id, u.Destination, strings.TrimSpace(u.Title), u.StartsAt, u.ExpiresAt, u.MaxClicks, nullBytes(u.PasswordHash))
+		id, u.Destination, strings.TrimSpace(u.Title), u.StartsAt, u.ExpiresAt, u.MaxClicks, nullBytes(u.PasswordHash),
+		u.CampaignID, u.FolderID)
 	if err != nil {
 		return domain.Link{}, wrap("update link", err)
 	}
@@ -108,6 +130,9 @@ func (s *Store) UpdateLink(ctx context.Context, id int64, u LinkUpdate) (domain.
 		return domain.Link{}, wrap("update link", fmt.Errorf("link %d: %w", id, domain.ErrNotFound))
 	}
 	if err := replaceTargets(ctx, tx, id, u.Targets); err != nil {
+		return domain.Link{}, wrap("update link", err)
+	}
+	if err := replaceTags(ctx, tx, id, u.TagIDs); err != nil {
 		return domain.Link{}, wrap("update link", err)
 	}
 	if err := tx.Commit(ctx); err != nil {

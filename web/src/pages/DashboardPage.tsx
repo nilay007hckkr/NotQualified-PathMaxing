@@ -33,6 +33,7 @@ export function DashboardPage() {
     <section aria-labelledby="dash-title">
       <div className="page-head">
         <div>
+          <p className="kicker">Live dashboard</p>
           <h1 id="dash-title">Overview</h1>
           <p className="muted">Every visit to your links, labelled honestly: humans, bots, and visits a rule refused.</p>
         </div>

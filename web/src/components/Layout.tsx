@@ -15,13 +15,19 @@ export function Layout() {
       <header className="topbar">
         <NavLink to="/" className="brand" aria-label="PathMaxing home">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={28} height={28} />
-          <span>PathMaxing</span>
+          <span>
+            Path<b>Maxing</b>
+          </span>
         </NavLink>
         <nav aria-label="Main" className="nav">
           <NavLink to="/" end>
             Overview
           </NavLink>
           <NavLink to="/links">Links</NavLink>
+          <NavLink to="/campaigns">Campaigns</NavLink>
+          <NavLink to="/import">Import</NavLink>
+          <NavLink to="/bio">Bio pages</NavLink>
+          {user?.role === 'admin' && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         {user && (
           <div className="account">

@@ -1,5 +1,7 @@
-# Local Postgres for development: docker compose up -d db
-# The credentials are for this local container only.
+# Local development:
+#   docker compose up -d db                 Postgres only (run the server with go run)
+#   docker compose --profile app up --build  Postgres and the server image
+# The credentials are for these local containers only.
 services:
   db:
     image: postgres:16-alpine
@@ -16,6 +18,19 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  app:
+    profiles: ["app"]
+    build: .
+    environment:
+      APP_ENV: development
+      BASE_URL: http://localhost:8080
+      DATABASE_URL: postgres://pathmaxing:pathmaxing@db:5432/pathmaxing?sslmode=disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

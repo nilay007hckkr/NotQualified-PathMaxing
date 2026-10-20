@@ -17,12 +17,10 @@
 1 docker-compose.yml
 1 .github/*
 1 scripts/*
-1 CLAUDE.md
 1 SUMMARY.md
 1 PARTS.md
 1 API.md
 1 COMMIT_PLAN.md
-1 .claude/settings.json
 1 cmd/server/main.go
 1 cmd/server/main_test.go
 1 internal/app/*

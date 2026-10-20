@@ -266,6 +266,37 @@ func (s *Service) EnsureAdmin(ctx context.Context, email, password string) error
 	return err
 }
 
+// AccountSummary is a user as the admin users list shows them.
+type AccountSummary struct {
+	User
+	CreatedAt time.Time `json:"created_at"`
+	LinkCount int64     `json:"link_count"`
+}
+
+// ListUsers returns accounts newest first, before the id cursor.
+func (s *Service) ListUsers(ctx context.Context, beforeID int64, limit int) ([]AccountSummary, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT u.id, u.email, u.name, u.role, u.workspace_id, u.created_at,
+		       (SELECT count(*) FROM links l WHERE l.owner_id = u.id AND l.deleted_at IS NULL)
+		FROM users u WHERE ($1 = 0 OR u.id < $1) ORDER BY u.id DESC LIMIT $2`, beforeID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("auth: list users: %w", err)
+	}
+	defer rows.Close()
+	var out []AccountSummary
+	for rows.Next() {
+		var a AccountSummary
+		var role string
+		if err := rows.Scan(&a.ID, &a.Email, &a.Name, &role, &a.WorkspaceID, &a.CreatedAt, &a.LinkCount); err != nil {
+			return nil, fmt.Errorf("auth: list users: %w", err)
+		}
+		a.Role = domain.Role(role)
+		a.CreatedAt = a.CreatedAt.UTC()
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 func (s *Service) newSession(ctx context.Context, userID int64) (string, error) {
 	var b [32]byte
 	if _, err := rand.Read(b[:]); err != nil {

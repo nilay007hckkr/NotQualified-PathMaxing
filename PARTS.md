@@ -1,6 +1,6 @@
 # PARTS.md: 5-part team split, ownership and handoff (PathMaxing)
 
-Claude Code writes all the code on one laptop. It does **not** commit or push. The code is split into 5 parts, one per team member. Each part was built as a series of real build steps (C01–C40, used below and in the migration file names) and committed as the 15 commits in `COMMIT_PLAN.md`.
+The code is split into 5 parts, one per team member. Each part was built as a series of real build steps (C01–C40, used below and in the migration file names) and committed as the 15 commits in `COMMIT_PLAN.md`.
 
 Every member gets a zip named after them (`Nilay.zip`, `Mayank.zip`, `Karan.zip`, `Mansi.zip`, `Manas.zip`). It contains their code and an `INSTRUCTIONS.txt`. Each member then commits their own steps from their own GitHub account.
 
@@ -44,7 +44,7 @@ The "C..." numbers in the part sections below are build steps. `COMMIT_PLAN.md` 
 **Owns:**
 - top-level files: `go.mod`/`go.sum` (shared), `README.md`, `.gitignore`, `.gitattributes` (LF line endings, so the shell scripts survive a Windows checkout), `.env.example`, `.dockerignore`, `Makefile`, `Dockerfile`, `docker-compose.yml`
 - tooling: `.github/workflows/ci.yml`, `scripts/` (including `ownership.txt`, `lib.sh`, `snapshot-step.sh`, `verify-steps.sh`, `make-handoff.sh`)
-- docs and settings: `CLAUDE.md`, `SUMMARY.md`, `PARTS.md`, `API.md`, `COMMIT_PLAN.md`, `.claude/settings.json`
+- docs: `SUMMARY.md`, `PARTS.md`, `API.md`, `COMMIT_PLAN.md`
 - `cmd/server/main.go` and its boot test, `internal/app` (registry, config, health check, static serving), `internal/shortcode`, `internal/urlcheck`
 - `docs/parts/part1-foundation.md`
 
@@ -176,11 +176,11 @@ The SQL for the tables Part 3 owns (`destination_checks`, `alerts`) lives in sto
 
 **Done when:** `npm run build` and `npm test` pass, the app works on mobile, there is no fake data in production builds, and both demo scenarios from `SUMMARY.md` can be clicked through end to end.
 
-## Handoff process (no git from Claude Code)
+## Handoff process
 
 The full mechanics are in `COMMIT_PLAN.md`. In short:
 
-1. Claude Code builds the steps in the global order. After each step passes its checks, it runs `scripts/snapshot-step.sh`, which saves exactly the files that step changed.
+1. The steps are built in the global order on one laptop. After each step passes its checks, `scripts/snapshot-step.sh` saves exactly the files that step changed.
 2. `scripts/verify-steps.sh` rebuilds the repository commit by commit in a temp folder and runs the checks after each one.
 3. `scripts/make-handoff.sh <REPO_URL>` writes `handoff/share/`:
    - `Nilay.zip`, `Mayank.zip`, `Karan.zip`, `Mansi.zip`, `Manas.zip`
