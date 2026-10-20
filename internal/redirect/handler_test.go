@@ -14,6 +14,7 @@ import (
 
 	"pathmaxing/internal/classify"
 	"pathmaxing/internal/domain"
+	"pathmaxing/internal/linkcache"
 	"pathmaxing/internal/memstore"
 	"pathmaxing/internal/ratelimit"
 	"pathmaxing/internal/rules"
@@ -259,5 +260,27 @@ func TestReferrerHost(t *testing.T) {
 		if got := referrerHost(in); got != want {
 			t.Errorf("referrerHost(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// With the cache in front of the store, the cached copy of a capped link
+// keeps its old cap_used. Once a human is refused for a full cap, the
+// handler drops that copy, so bots are refused too instead of redirected.
+func TestFullCapRefreshesTheCache(t *testing.T) {
+	e := newEnv(t)
+	cache := linkcache.New(e.store, time.Minute, 100)
+	e.h.Links = cache
+	e.h.Invalidator = cache
+	one := int64(1)
+	e.put(t, domain.Link{Code: "once", MaxClicks: &one})
+
+	if rec := e.do("GET", "/once", chromeDesk); rec.Code != http.StatusFound {
+		t.Fatalf("first human: %d", rec.Code)
+	}
+	if rec := e.do("GET", "/once", chromeDesk); rec.Code != http.StatusGone {
+		t.Fatalf("second human: %d", rec.Code)
+	}
+	if rec := e.do("GET", "/once", whatsApp); rec.Code != http.StatusGone {
+		t.Fatalf("bot after the cap filled: %d, want 410", rec.Code)
 	}
 }

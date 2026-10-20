@@ -8,6 +8,7 @@ import (
 	"pathmaxing/internal/app"
 	"pathmaxing/internal/classify"
 	"pathmaxing/internal/domain"
+	"pathmaxing/internal/linkcache"
 	"pathmaxing/internal/memstore"
 	"pathmaxing/internal/ratelimit"
 	"pathmaxing/internal/redirect"
@@ -38,13 +39,23 @@ func init() {
 			return nil
 		},
 		Wire: func(_ context.Context, a *app.App) error {
-			// The redirect path resolves codes through LinkResolver, which is
-			// the final link store for now.
+			// Every module has provided its link store by now (in memory, or
+			// Postgres), so the cache goes in front of the final one.
 			store, err := app.Get[domain.LinkStore](a)
 			if err != nil {
 				return err
 			}
-			app.Provide[domain.LinkResolver](a, store)
+			ttl, err := a.Config.Duration("LINK_CACHE_TTL", time.Minute)
+			if err != nil {
+				return err
+			}
+			size, err := a.Config.Int("LINK_CACHE_SIZE", 50000)
+			if err != nil {
+				return err
+			}
+			cache := linkcache.New(store, ttl, size)
+			app.Provide[domain.LinkResolver](a, cache)
+			app.Provide[domain.CacheInvalidator](a, cache)
 			return nil
 		},
 		Routes: func(a *app.App, mux *http.ServeMux) error {
@@ -83,6 +94,10 @@ func newRedirectHandler(a *app.App) (*redirect.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	invalidator, err := app.Get[domain.CacheInvalidator](a)
+	if err != nil {
+		return nil, err
+	}
 	keys := secret.NewKeys(a.Config.SecretKey)
 	return &redirect.Handler{
 		Links:           resolver,
@@ -94,6 +109,7 @@ func newRedirectHandler(a *app.App) (*redirect.Handler, error) {
 		Visitors:        keys.NewVisitors(),
 		PasswordLimiter: ratelimit.New(10, 15*time.Minute),
 		ProxyHops:       a.Config.TrustedProxyHops,
+		Invalidator:     invalidator,
 		Log:             a.Log,
 		Now:             time.Now,
 	}, nil

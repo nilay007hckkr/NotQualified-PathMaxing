@@ -34,8 +34,11 @@ type Handler struct {
 	// PasswordLimiter is keyed by IP and link: 10 tries per 15 minutes.
 	PasswordLimiter *ratelimit.Limiter
 	ProxyHops       int
-	Log             *slog.Logger
-	Now             func() time.Time
+	// Invalidator, when set, drops a cached link whose cap turned out to be
+	// full, so bots stop seeing the stale room left in the cached copy.
+	Invalidator domain.CacheInvalidator
+	Log         *slog.Logger
+	Now         func() time.Time
 }
 
 // Register mounts the routes. A GET pattern also matches HEAD.
@@ -96,6 +99,10 @@ func (h *Handler) visit(w http.ResponseWriter, r *http.Request) {
 		h.Log.Error("rule engine", "link_id", link.ID, "err", err)
 		renderPage(w, http.StatusServiceUnavailable, unavailablePage())
 		return
+	}
+
+	if decision.Outcome == domain.OutcomeCapReached && !link.CapReached() && h.Invalidator != nil {
+		h.Invalidator.Invalidate(link.Code)
 	}
 
 	qr := r.URL.Query().Get("s") == "qr"
