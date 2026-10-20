@@ -1,0 +1,27 @@
+# Secrets: only the example is committed.
+.env
+.env.*
+!.env.example
+
+# Handoff output from scripts/ (built on one laptop, never committed).
+/handoff/
+/.handoff-shadow/
+
+# Go build output.
+/bin/
+/tmp/
+*.exe
+*.test
+*.out
+__debug_bin*
+
+# Web dependencies and build output.
+node_modules/
+/web/dist/
+/web/coverage/
+.vite/
+*.tsbuildinfo
+*.log
+
+# Local tool settings.
+.claude/settings.local.json

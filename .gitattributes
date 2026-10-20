@@ -1,0 +1,7 @@
+# Check text files out with LF everywhere. Git for Windows would otherwise
+# turn them into CRLF, and bash refuses to run a script with CRLF endings.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.mmdb binary

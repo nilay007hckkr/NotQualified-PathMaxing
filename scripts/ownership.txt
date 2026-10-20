@@ -1,0 +1,91 @@
+# Who owns each file: "<part> <glob>", one per line. See PARTS.md.
+# Every file in the repository must match exactly one line. "*" in a glob
+# also matches "/". Part "*" marks the shared files that travel with
+# whichever commit adds a dependency.
+
+* go.mod
+* go.sum
+
+# Part 1: Foundation & tooling (Manas)
+1 README.md
+1 .gitignore
+1 .gitattributes
+1 .env.example
+1 .dockerignore
+1 Makefile
+1 Dockerfile
+1 docker-compose.yml
+1 .github/*
+1 scripts/*
+1 CLAUDE.md
+1 SUMMARY.md
+1 PARTS.md
+1 API.md
+1 COMMIT_PLAN.md
+1 .claude/settings.json
+1 cmd/server/main.go
+1 cmd/server/main_test.go
+1 internal/app/*
+1 internal/shortcode/*
+1 internal/urlcheck/*
+1 docs/parts/part1-*
+
+# Part 2: Database setup & load testing (Mansi)
+2 internal/migrate/*
+2 cmd/server/module_db.go
+2 migrations/embed.go
+2 migrations/C03_*
+2 cmd/seed/*
+2 loadtest/*
+2 docs/parts/part2-*
+
+# Part 3: Redirect engine & trust layer (Nilay)
+3 internal/domain/*
+3 internal/memstore/*
+3 internal/rules/*
+3 internal/redirect/*
+3 internal/linkcache/*
+3 internal/secret/*
+3 internal/ratelimit/*
+3 internal/httpx/*
+3 internal/threatintel/*
+3 internal/trust/*
+3 internal/classify/*
+3 internal/geo/*
+3 internal/alerts/*
+3 cmd/server/module_core.go
+3 cmd/server/module_trust.go
+3 migrations/C20_*
+3 migrations/C23_*
+3 migrations/C25_*
+3 migrations/C29_*
+3 docs/parts/part3-*
+
+# Part 4: Data, API & governance (Mayank)
+4 internal/store/*
+4 internal/clicks/*
+4 internal/analytics/*
+4 internal/auth/*
+4 internal/api/*
+4 internal/bulk/*
+4 internal/qr/*
+4 internal/bio/*
+4 internal/admin/*
+4 cmd/server/module_data.go
+4 cmd/server/module_api.go
+4 migrations/C07_*
+4 migrations/C09_*
+4 migrations/C11_*
+4 migrations/C13_*
+4 migrations/C16_*
+4 migrations/C19_*
+4 migrations/C22_*
+4 migrations/C24_*
+4 migrations/C26_*
+4 migrations/C30_*
+4 docs/parts/part4-*
+
+# Part 5: Frontend & deployment (Karan)
+5 web/*
+5 deploy/*
+5 docs/parts/part5-*
